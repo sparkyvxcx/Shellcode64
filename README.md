@@ -4,9 +4,56 @@ For the purpose of learning how to shellcode
 
 ## Getting Started
 
+To invoke syscall in assembly at x86_64 Linux system, syscall number placed in RAX register, and rest of arguments put into registers with following order RDI, RSI, RDX, R10, R8, R9.
+
+[Useful syscall table](https://filippo.io/linux-syscall-table/) By filippo
+
 ## Launch /bin/sh
 
+To launch another program from assembly, we use execve syscall to launch that specific program. Since execve's syscall number is 59, then the register RAX needs to hold 59 when invoking syscall. Based on the man page of `execve`, in order to invoke `execve` it need three arguments, each were: First, the memory address that holding the pathname of the program caller want to run. Second, the address that holding the address of pathname to invoke. Third, memory address of environment parameters. Hence, the RDI hold the memory address to the pathname, RSI hold the address to the address of the pathname, since there is no need to pass envp to launch a program, register RDX can be simply set to 0, in assembly, use `xor rdx, rdx` to set rdx to 0. All the arguments needs to be null terminated.
+
+Strings store in stack in little endian format, plus in 64 bit system, stack can hold 8 byte, `/bin/sh` takes 7 byte, add an additional forword slash didn't compromise functionality but filling exactly 8 byte into the stack.
+
+Use Python to get hexdecimal of `/bin//sh` in little endian format:
+
+#### From Interpreter:
+
+Python3
+
+```python
+>>> '/bin//sh'[::-1].encode().hex()
+'68732f2f6e69622f'
+```
+
+Python2
+
+```python
+>>> '/bin//sh'[::-1].encode('hex')
+'68732f2f6e69622f'
+```
+
+Stack layout before invoking syscall:
+
+```
+          Memory address          Stack
+                           +------------------+
+               ....        |       ....       | 
+                           +------------------+
+ rsi => 0x00007fffffffe0e0 |0x00007fffffffe0d0|
+                           +------------------+
+        0x00007fffffffe0d8 |0x0000000000000000|
+                           +------------------+
+ rdi => 0x00007fffffffe0e0 |0x68732f2f6e69622f|
+                           +------------------+
+        0x00007fffffffe0e8 |0x0000000000000000|
+                           +------------------+
+                ....       |       ....       |
+                           +------------------+
+```
+
 ## Bind TCP Shell with password
+
+Major issue is to compare string, which means password authentication.
 
 ## Reverse TCP Shell with password
 
