@@ -16,7 +16,7 @@ Strings store in stack in little endian format, plus in 64 bit system, stack can
 
 Use Python to get hexdecimal of `/bin//sh` in little endian format:
 
-#### From Interpreter:
+**From Interpreter:**
 
 Python3
 
@@ -39,7 +39,7 @@ Stack layout before invoking syscall:
                            +------------------+
                ....        |       ....       | 
                            +------------------+
- rsi => 0x00007fffffffe0e0 |0x00007fffffffe0d0|
+ rsi => 0x00007fffffffe0d0 |0x00007fffffffe0e0|
                            +------------------+
         0x00007fffffffe0d8 |0x0000000000000000|
                            +------------------+
@@ -53,13 +53,50 @@ Stack layout before invoking syscall:
 
 ## Bind TCP Shell with password
 
-Major issue is to compare string, which means password authentication.
+After connection established, stdin, stdout, stderr are all redirect to this established connection we ask user for passcode to authenticate whether current user is legitimate or not.
+
+First, program print "ask for passcode" prompt to screen and wait for user input. The print prompt can be done by invoking write(1) syscall, for the read input part it can be done by invoing read(0) syscall. As for the string storage, we can hard code string into assembly code, but there is length limitation. Say once shell established, program print `Password: ` which takes 10 byte to represent, if goes for hardcoded option the assembly code would be like, take 2 of 10 byte from prompt store it to RAX, push it into the stack, then take rest 8 byte store it in RAX, again push it into the stack, now rsp has point to the prompt we want to print out. Since write syscall takes three arugement which were `file describtor`, `memory address to the output string`, `length of that string`. So, register RDI, RSI, RDX each were responible for those arguments, simply `mov rsi rsp` to let RSI hold the address to the prompt, then set RDI to 1 which represents standard output, finally set RDI to 10 which clearly means the length.
+
+First fragment(2 byte) `: ` in hexdecimal `0x203a`, when it gets to pushed into stack it will auto null terminated and look like this `0x000000000000203a`. Then, second fragment(8 byte) `Password` in hexdecimal `0x64726f7773736150`.
+
+```assembly 
+mov eax, 0x203a
+push rax
+mov rax, 0x64726f7773736150
+push rax
+```
+
+Use GDB to check stack:
+
+```bash
+(gdb) x/4gx $rsp
+
+0x7fffffffdf68:	0x64726f7773736150	0x00000000000a203a
+0x7fffffffdf78:	0x0000000000000000	0x0000000000000001
+```
+
+Then, move `rsp` to `rsi` to hold the reference to the string to print, increment `rdx` to 10 which stand for string length.
+
+```assembly
+mov rsi rsp
+xor rdx rdx
+add rdx 10
+```
+
+Finally, set `rax` to 1 for the write(1) syscall number, and set `rdi` to 1 which stand for stdout, and invoke syscall.
+
+```assembly
+xor rax, rax
+add rax, 1
+mov rdi, rax
+syscall
+```
 
 ## Reverse TCP Shell with password
 
 ## Egg hunter
 
-Compare to x86 system, egg hunt under x86_64 system is relatively slow. In order to speed up common egg hunt proof of concept operation, using gdb to modify the value of RDX register which in our case is the pointer register that hold the value of virtual memory address space from 0x0000000000000000 all the way to 0x00007fffffffffff.
+Compare to x86 system, egg hunt under x86_64 system is relatively slow. In order to speed up common egg hunt proof of concept operation, using gdb to modify the value of RDX register which in our case is the pointer register that hold the value of virtual memory address space from `0x0000000000000000` all the way to `0x00007fffffffffff`.
 
 Based on the original egghunt paper writen by [mmiller@hick.org], there are three way to accomplish egghunt under Linux system. Which are access, access, sigaction syscall.
 
@@ -164,7 +201,7 @@ After several continue:
 ```
 > 0x55555555806b <egghunter+11>   or     dx,0xfff
   0x555555558070 <egghunter+16>   inc    rdx
-  ...
+       ....
   0x555555558073 <egghunter+19>   push   rax
   0x555555558078 <egghunter+24>   push   rsi
   0x555555558079 <egghunter+25>   xor    rsi,rsi
@@ -172,7 +209,7 @@ After several continue:
   0x555555558080 <egghunter+32>   mov    al,0x15
   0x555555558082 <egghunter+34>   syscall
   0x555555558084 <egghunter+36>   cmp    al,0xf2
-  ...
+       ....
 ```
 
 Now egghunter about to execute `or dx, 0xfff` to switch to another memory page.
@@ -189,17 +226,17 @@ Query memory address of shellcode variable:
 The result may vary each time loader runs, which is the purpose of ASLR
 
 ```
-set $rdi = 0x0000555555558020
+(gdb) set $rdi = 0x0000555555558020
 ```
 
-Now presumably egghunter is now at correct memory page, then address 0x0000555555558020 will look like this:
+Now presumably egghunter is now at correct memory page, then address `0x0000555555558020` will look like this:
 
 ```
 0x0000555555558020 0x5090509050905090 <- egg
 0x0000555555558028 0x622fbb4850c03148 <- shellcode
 0x0000555555558030 0x485368732f2f6e69
-                   ...
+       ....               ....
 [ higher address ] [    shellcode   ]
 ```
 
-Pointer surpass 4 byte to check given address at RDI is accessible or not. If succeed then previous 4 byte is accessible as well. After that, egghunter go ahead to validate egg string. Again, egghunter check 4 byte from RDI which is 0x50905090 to see if this 4 byte match ebx or not, then proceed to check next 4 byte against ebx. If all succeed, means egghunter now locate correct egg. Therefore, jmp into RDI, which are essentailly several `nop` and `push` instruction, and finally slide into real shellcode.
+Pointer surpass 4 byte to check given address at RDI is accessible or not. If succeed then previous 4 byte is accessible as well. After that, egghunter go ahead to validate egg string. Again, egghunter check 4 byte from RDI which is `0x50905090` to see if this 4 byte match ebx or not, then proceed to check next 4 byte against ebx. If all succeed, means egghunter now locate correct egg. Therefore, jmp into RDI, which are essentailly several `nop` and `push` instruction, and finally slide into real shellcode.
