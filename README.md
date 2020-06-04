@@ -34,7 +34,7 @@ Python2
 
 Stack layout before invoking syscall:
 
-```
+```assembly
           Memory address          Stack
                            +------------------+
                ....        |       ....       | 
@@ -112,7 +112,8 @@ Stage 1:
 
 Stage 2:
 
-	Send egghunter shellcode (2) into vulnerable program, by using the aforementioned unique egg, this tiny shellcode will go ahead to scan all the virtual memory address space of target system. From page to page, once egghunter successfully locate egg, then we can jump into this exploit shellcode we planted at stage 1.
+	Send egghunter shellcode (2) into vulnerable program, by using the aforementioned unique egg, this tiny shellcode will go ahead to scan all the virtual memory address space of target system.
+	From page to page, once egghunter successfully locate egg, then we can jump into this exploit shellcode we planted at stage 1.
 
 #### Proof of concept workthrough
 
@@ -198,7 +199,7 @@ Because of ASLR, the address of egg + shellcode is randomized at runtime, that i
 
 After several continue:
 
-```
+```assembly
 > 0x55555555806b <egghunter+11>   or     dx,0xfff
   0x555555558070 <egghunter+16>   inc    rdx
        ....
@@ -231,7 +232,7 @@ The result may vary each time loader runs, which is the purpose of ASLR
 
 Now presumably egghunter is now at correct memory page, then address `0x0000555555558020` will look like this:
 
-```
+```assembly
 0x0000555555558020 0x5090509050905090 <- egg
 0x0000555555558028 0x622fbb4850c03148 <- shellcode
 0x0000555555558030 0x485368732f2f6e69
