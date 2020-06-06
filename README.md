@@ -7,15 +7,16 @@ For the purpose of learning how to shellcode
 To invoke syscall in assembly at x86_64 Linux system, syscall number placed in RAX register, and rest of arguments put into registers with following order RDI, RSI, RDX, R10, R8, R9.
 
 [64-bit syscall numbers](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl)
+
 [Useful syscall table](https://filippo.io/linux-syscall-table/) By filippo
 
 ## Launch /bin/sh
 
 To launch another program from assembly, we use execve syscall to launch that specific program. Since execve's syscall number is 59, then the register RAX needs to hold [59](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl) when invoking syscall. Based on the man page of `execve`, in order to invoke `execve` it need three arguments, each were: First, the memory address that holding the pathname of the program caller want to run. Second, the address that holding the address of pathname to invoke. Third, memory address of environment parameters. Hence, the RDI hold the memory address to the pathname, RSI hold the address to the address of the pathname, since there is no need to pass envp to launch a program, register RDX can be simply set to 0, in assembly, use `xor rdx, rdx` to set rdx to 0. All the arguments needs to be null terminated.
 
-Strings store in stack in little endian format, plus in 64 bit system, stack can hold 8 byte, `/bin/sh` takes 7 byte, add an additional forword slash didn't compromise functionality but filling exactly 8 byte into the stack.
+Strings store in stack in little endian format, plus in 64 bit system, stack can hold 8 bytes, `/bin/sh` takes 7 bytes, add an additional forword slash didn't compromise functionality but filling exactly 8 bytes into the stack.
 
-Use Python to get hexdecimal of `/bin//sh` in little endian format:
+Use Python to get hexadecimal of `/bin//sh` in little endian format:
 
 **From Interpreter:**
 
@@ -58,9 +59,9 @@ After connection established, stdin, stdout, stderr are all redirect to this est
 
 ### Password prompt
 
-Program print "ask for passcode" prompt to screen and wait for user input. The print prompt can be done by invoking [write(1)](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl) syscall, for the read input part it can be done by invoing [read(0)](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl) syscall. As for the string storage, we can hard code string into assembly code, but there is length limitation. Say once shell established, program print `Password: ` which takes 10 byte to represent, if goes for hardcoded option the assembly code would be like, take 2 of 10 byte from prompt store it to RAX, push it into the stack, then take rest 8 byte store it in RAX, again push it into the stack, now rsp has point to the prompt we want to print out. Since write syscall takes three arugement which were `file describtor`, `memory address to the output string`, `length of that string`. So, register RDI, RSI, RDX each were responible for those arguments, simply `mov rsi rsp` to let RSI hold the address to the prompt, then set RDI to 1 which represents standard output, finally set RDI to 10 which clearly means the length.
+Program print "ask for passcode" prompt to screen and wait for user input. The print prompt can be done by invoking [write(1)](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl) syscall, for the read input part it can be done by invoing [read(0)](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl) syscall. As for the string storage, we can hard code string into assembly code, but there is length limitation. Say once shell established, program print `Password: ` which takes 10 byte to represent, if goes for hardcoded option the assembly code would be like, take 2 of 10 byte from prompt store it to RAX, push it into the stack, then take rest 8 bytes store it in RAX, again push it into the stack, now rsp has point to the prompt we want to print out. Since write syscall takes three arugement which were `file describtor`, `memory address to the output string`, `length of that string`. So, register RDI, RSI, RDX each were responible for those arguments, simply `mov rsi rsp` to let RSI hold the address to the prompt, then set RDI to 1 which represents standard output, finally set RDI to 10 which clearly means the length.
 
-First fragment(2 byte) `: ` in hexdecimal `0x203a`, when it gets to pushed into stack it will auto null terminated and look like this `0x000000000000203a`. Then, second fragment(8 byte) `Password` in hexdecimal `0x64726f7773736150`.
+First fragment(2 byte) `: ` in hexadecimal `0x203a`, when it gets to pushed into stack it will auto null terminated and look like this `0x000000000000203a`. Then, second fragment(8 bytes) `Password` in hexadecimal `0x64726f7773736150`.
 
 ```assembly 
 mov eax, 0x203a
@@ -96,6 +97,48 @@ syscall
 ```
 
 ### Input password authentication
+
+Once password prompt printed, the program waits for the user to provide a password for further operation. To implement this use read(0) syscall to read user input.
+
+Based on the definition:
+
+```c
+       #include <unistd.h>
+
+       ssize_t read(int fd, void *buf, size_t count);
+```
+
+So, `read()` will read `count` size of bytes from file descriptor `fd` into the `buf`. Now, map this to assembly will have register RDI holds file descriptor `fd` which will be `0` for stdin, register RSI holds `*buf` which will be memory address of buffer which we will get from decrement certain size of buffer from stack, then assign RSP to RSI, and finally, register RDX will specify the size of input to read from `fd` to buffer.
+
+Set test password to `kkkkkkkk` which takes 8 bytes, with hexadecimal little endian format `0x6b6b6b6b6b6b6b6b`.
+
+With that being said, assembly code goes like this:
+
+```assembly
+xor rax, rax ; set syscall number to 0
+mov rdi, rax ; set stdin
+sub rsp, 8   ; set buffer
+mov rsi, rsp ; assgin buffer address to rsi
+mov dl, 8    ; read 8 bytes from stdin
+syscall
+```
+
+Then the program will wait for user input, once the user hits enter, the program continues to execute to proceed string compare. Now, RSI point to the buffer that filled with user input, hence we load it into one register to compare whether it matches the password or not.
+
+First, we load hexadecimal representation of password `0x6b6b6b6b6b6b6b6b` into rax, then load buffer which RSI pointed to into the RDI register, and proceed string compare, if it's zero means their matches, then launch shell for the user, otherwise, program proceeds to shut down the connection.
+
+```assembly
+...
+mov rax, 0x6b6b6b6b6b6b6b6b ; load password "kkkkkkkk"
+mov rdi, [rsi]              ; load user input
+xor rax, rdi                ; xor user input again password, result either be zero or not zero
+xor rdi, rdi                ; set 0
+cmp rax, rdi                ; if matches rax would be zero, then `je` will take
+
+je shell                    ; if equal then jump to shell, which is the same code from execve_sh.asm
+
+... exit code
+```
 
 ## Reverse TCP Shell with password
 
@@ -133,7 +176,7 @@ Compile shellcode:
 $ nasm -felf64 execve_sh.asm -o shell.o
 ```
 
-Use objdump to check if there is any nullbyte remained (loader is writen in C, which use null byte as string terminater symbol, in that case we don't want any null byte presence in our shellcode):
+Use objdump to check if there is any null byte remained (loader is writen in C, which use null byte as string terminater symbol, in that case we don't want any null byte presence in our shellcode):
 
 ```bash
 $ objdump -M intel -D shell.o
@@ -248,9 +291,9 @@ Now presumably egghunter is now at correct memory page, then address `0x00005555
 [ higher address ] [    shellcode   ]
 ```
 
-Pointer surpass 4 byte to check given address at RDI is accessible or not. If succeed then previous 4 byte is accessible as well. After that, egghunter go ahead to validate egg string. Again, egghunter check 4 byte from RDI which is `0x50905090` to see if this 4 byte match ebx or not, then proceed to check next 4 byte against ebx. If all succeed, means egghunter now locate correct egg. Therefore, jmp into RDI, which are essentailly several `nop` and `push` instruction, and finally slide into real shellcode.
+Pointer surpass 4 bytes to check given address at RDI is accessible or not. If succeed then previous 4 bytes is accessible as well. After that, egghunter go ahead to validate egg string. Again, egghunter check 4 bytes from RDI which is `0x50905090` to see if this 4 bytes match ebx or not, then proceed to check next 4 bytes against ebx. If all succeed, means egghunter now locate correct egg. Therefore, jmp into RDI, which are essentailly several `nop` and `push` instruction, and finally slide into real shellcode.
 
-Instead of mannuly check 4 byte from RDX then move to next 4 byte, we can replace it with `scasd` instruction which compare rdx against rax in 4 byte length, after that it will automatically increment RDX to check next 4 byte.
+Instead of mannuly check 4 bytes from RDX then move to next 4 bytes, we can replace it with `scasd` instruction which compare rdx against rax in 4 bytes length, after that it will automatically increment RDX to check next 4 bytes.
 
 More simplifid assembly code:
 
@@ -318,7 +361,7 @@ SYSCALL_DEFINE4(rt_sigaction, int, sig,
 }
 ```
 
-The arguments for this function can be translated as `sig` being in the RDI register, memory address of struct `act` being in the RSI register, and memory address of struct `oact` being in the RDX register, and forth argument as `sigsetsize` bing in the R10 register to pass first if condition check. The RAX register will again hold the system call number which is [13](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl):
+The arguments for this function can be translated as `sig` being in the RDI register, memory address of struct `act` being in the RSI register, and memory address of struct `oact` being in the RDX register, and forth argument as `sigsetsize` being in the R10 register to pass first if condition check. The RAX register will again hold the system call number which is [13](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl):
 
 The sigaction structure is defined as something like:
 

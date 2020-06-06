@@ -67,9 +67,9 @@ passcode:
 	; read
 	mov rax, 0
 	mov rdi, 0
-	sub rsp, 16
+	sub rsp, 8
 	mov rsi, rsp
-	mov rdx, 16
+	mov rdx, 8
 	syscall
 
 	; compare

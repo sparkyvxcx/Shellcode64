@@ -88,9 +88,9 @@ passcode:
 	; read
 	xor rax, rax
 	mov rdi, rax
-	sub rsp, 16
+	sub rsp, 8
 	mov rsi, rsp
-	mov dl, 16
+	mov dl, 8
 	syscall
 
 	mov rax, 0x6b6b6b6b6b6b6b6b
