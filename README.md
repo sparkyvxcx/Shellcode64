@@ -142,6 +142,8 @@ je shell                    ; if equal then jump to shell, which is the same cod
 
 ## Reverse TCP Shell with password
 
+Authentication part is identical to bind TCP shell.
+
 ## Egg hunter
 
 Compare to x86 system, egg hunt under x86_64 system is relatively slow. In order to speed up common egg hunt proof of concept operation, using gdb to modify the value of RDX register which in our case is the pointer register that hold the value of virtual memory address space from `0x0000000000000000` all the way to `0x00007fffffffffff`.
@@ -277,11 +279,13 @@ Query memory address of shellcode variable:
 ```
 The result may vary each time loader runs, which is the purpose of ASLR
 
+Intentionally set register RDI to point to exact memory page which contain previous implanted egg:
+
 ```
 (gdb) set $rdi = 0x0000555555558020
 ```
 
-Now presumably egghunter is now at correct memory page, then address `0x0000555555558020` will look like this:
+Now presumably egghunter is at correct memory page, then address `0x0000555555558020` will look like this:
 
 ```assembly
 0x0000555555558020 0x5090509050905090 <- egg
@@ -363,7 +367,7 @@ SYSCALL_DEFINE4(rt_sigaction, int, sig,
 
 The arguments for this function can be translated as `sig` being in the RDI register, memory address of struct `act` being in the RSI register, and memory address of struct `oact` being in the RDX register, and forth argument as `sigsetsize` being in the R10 register to pass first if condition check. The RAX register will again hold the system call number which is [13](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_64.tbl):
 
-The sigaction structure is defined as something like:
+The sigaction structure is defined as follow:
 
 ```c
     struct sigaction {
@@ -403,4 +407,39 @@ scan_page:
 	scasd
 	jnz scan_page
 	jmp rsi
+```
+
+The major difference between 32-bit and 64-bit egg hunter implemented by using sigaction is in 64-bit version, sigaction or rt_sigaction takes an additional argument to check sigsetsize, while this specific argument is auto calculate in 32-bit version. In 64 bit version, we have to provide a  reasonable sigsetsize to pass the first if condition check [1], otherwise egghunter will always throw -EINVAL error, then we will not being able to proceed egg hunting, Since, the purpose of using sigaction syscall is to exploit EFAULT error return.
+
+```
+{
+	struct k_sigaction new_sa, old_sa;
+	int ret;
+
+	/* XXX: Don't preclude handling different sized sigset_t's.  */
+	if (sigsetsize != sizeof(sigset_t))  // <===== [1] Here check sigsetsize
+		return -EINVAL;
+
+	if (act && copy_from_user(&new_sa.sa, act, sizeof(new_sa.sa)))
+		return -EFAULT;
+
+	ret = do_sigaction(sig, act ? &new_sa : NULL, oact ? &old_sa : NULL);
+	if (ret)
+		return ret;
+
+	if (oact && copy_to_user(oact, &old_sa.sa, sizeof(old_sa.sa)))
+		return -EFAULT;
+
+	return 0;
+}
+```
+
+With that being said, we use register R10 to fill an addition argument:
+
+```assembly
+	xor rax, rax
+	add rax, 13
+	xor r10, r10
+	add r10, 8   ; <=== set sigsetsize (take whatever number you want)
+	syscall
 ```
