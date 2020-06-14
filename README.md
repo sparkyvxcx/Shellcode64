@@ -72,7 +72,7 @@ push rax
 
 Use GDB to check stack:
 
-```bash
+```shell
 (gdb) x/4gx $rsp
 
 0x7fffffffdf68:	0x64726f7773736150	0x00000000000a203a
@@ -174,19 +174,19 @@ Use execve_sh.asm as test shellcode, which will launch an interactive shell.
 
 Compile shellcode:
 
-```bash
+```shell
 $ nasm -felf64 execve_sh.asm -o shell.o
 ```
 
 Use objdump to check if there is any null byte remained (loader is writen in C, which use null byte as string terminater symbol, in that case we don't want any null byte presence in our shellcode):
 
-```bash
+```shell
 $ objdump -M intel -D shell.o
 ```
 
 Extract shellcode:
 
-```bash
+```shell
 $ bash gen.sh shell.o
 ```
 
@@ -194,19 +194,19 @@ Use egghunter1.asm as test egghunter, which implemented egg hunt by evoking acce
 
 Compile egghunter:
 
-```bash
+```shell
 $ nasm -felf64 egghunter1.asm -o egghunter.o
 ```
 
 Use objdump to check if there is any null byte remained:
 
-```bash
+```shell
 $ objdump -M intel -D egghunter.o
 ```
 
 Extract egghunter:
 
-```bash
+```shell
 $ bash gen.sh egghunter.o
 ```
 
@@ -226,13 +226,13 @@ Put these two shellcode string into loader.c
 
 Compile loader.c:
 
-```bash
+```shell
 $ gcc -fno-stack-protector -z execstack loader.c -o loader
 ```
 
 Validate egghunter:
 
-```bash
+```shell
 $ gdb -q ./loader -tui
 ```
 
@@ -443,3 +443,5 @@ With that being said, we use register R10 to fill an addition argument:
 	add r10, 8   ; <=== set sigsetsize (take whatever number you want)
 	syscall
 ```
+
+Now egghunter will able to loop from page to page to locate implanted egg to detonate real shellcode.
