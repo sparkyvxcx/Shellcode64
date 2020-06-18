@@ -38,7 +38,7 @@ $ gcc -m32 -fno-stack-protector -z execstack load.c -o msf_bind_shell
 
 
 
-**Note:** Before launch gdb, I do recommand to use some handy tools to boost this analysis process, cause constantly typing `disassemble` or `x/gbwx $esp/$eip/...` hunts my finger. For example, gdb pwn dev extensions like [pwndbg](https://github.com/pwndbg/pwndbg) or [gef](https://github.com/hugsy/gef), both were very fine gdb plug-in which can give you a colorful prompt at each breakpoint or interrupt your encontered, containing detailed information like register value, stack layout, etc. In this case, I use pwndbg to help me dissect functonality of msf shellcode.
+**Note:** Before launch gdb, I do recommend to use some handy tools to boost this analysis process, cause constantly typing `disassemble` or `x/gbwx $esp/$eip/...` hunts my finger. For example, gdb pwn dev extensions like [pwndbg](https://github.com/pwndbg/pwndbg) or [gef](https://github.com/hugsy/gef), both were very fine gdb plug-in which can give you a colorful prompt at each breakpoint or interrupt your encontered, containing detailed information like register value, stack layout, etc. In this case, I use pwndbg to help me dissect functonality of msf shellcode.
 
 
 
@@ -68,7 +68,7 @@ Then, set breakpoint at this location and run it:
 (gdb) run
 ```
 
-Now program will hit this breakpoint, step in to entry shellcode execution:
+Now program will hit this breakpoint, step into entry shellcode execution:
 
 ```shell
 (gdb) stepi
@@ -76,9 +76,9 @@ Now program will hit this breakpoint, step in to entry shellcode execution:
 
 If you have [pwndbg](https://github.com/pwndbg/pwndbg) plug-in installed before, you will now have this prompt displayed:
 
-![gdb-pwndbg](https://github.com/sparkyvxcx/Shellcode64/blob/master/screenshot/2020-06-15_10-51.png)
+![gdb-pwndbg](https://raw.githubusercontent.com/sparkyvxcx/Shellcode64/master/screenshot/2020-06-15_10-51.png)
 
-Before diving into assembly code, here is a quick rehearsal about each register's functionality when calling syscall, the syscall interface under 32-bit Linux is provided through soft-interrupt `0x80`. The table below describes each register's usage when evoking syscall.
+Before diving into assembly code, here is a quick rehearsal about each register's functionality when calling syscall, the syscall interface under 32-bit Linux is provided through soft-interrupt `0x80`. The table below describes each register's usage when invoking syscall.
 
 | Register | Usage          |
 | -------- | -------------- |
@@ -107,7 +107,7 @@ Assembly snippet 1:
 0x0804a04d <+13>:   int    0x80
 ```
 
-Above code indicate that first it zero out register`EBX`, so does register `EAX`and register `EDX`, and push `EBX` into the current stack frame, after that it increment 1 for `EBX` and push it into the stack followed another push push `0x2`into the stack again. 
+Above code indicate that first, it zeroes out register `EBX`, so does register `EAX` and register `EDX`, and push `EBX` into the current stack frame, after that, it increments 1 for `EBX` and push it into the stack followed another push to push `0x2` into the stack again. 
 
 
 
@@ -128,13 +128,13 @@ esp —▸ 0xbfffef60 | 0x00000002 |
                   +------------+
 ```
 
-Next instruction move `ESP`'s value to register `ECX` and move `0x66` (decimal 102) into 8-bit sub-register `AL` from `EAX`. Now it's clear that program has `EBX` (Argument 1) holds 1 and `ECX` (argument 2) holds reference to 2 with syscall number 102 which stands for [sys_socketcall](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_32.tbl) system call.
+Next instruction move `ESP`'s value to register `ECX` and move `0x66` (decimal 102) into 8-bit sub-register `AL` from `EAX`. Now it's clear that the program has `EBX` (Argument 1) holds 1 and `ECX` (argument 2) holds the reference to argument array passed to the sub-function socket with syscall number 102 which stands for [sys_socketcall](https://github.com/torvalds/linux/blob/master/arch/x86/entry/syscalls/syscall_32.tbl) system call.
 
 
 
 pwngdb plug-in had register listed out before execute `int 0x80`:
 
-![sys_socket](https://github.com/sparkyvxcx/Shellcode64/blob/master/screenshot/2020-06-16_22-47.png)
+![sys_socket](https://raw.githubusercontent.com/sparkyvxcx/Shellcode64/master/screenshot/2020-06-16_22-47.png)
 
 Scoketcall stands for socket system calls, here is definition:
 
@@ -168,7 +168,7 @@ Possible call values are defined as [follow](https://manpages.ubuntu.com/manpage
 #define SYS_RECVMSG     17      /* sys_recvmsg(2) */
 ```
 
-Therefore, what this snippet actually do is invoking sub-function [socket](https://manpages.ubuntu.com/manpages/bionic/man2/socket.2.html) function, with actual arguments consist of  `0x2`, `0x1` which stands for `AF_INET` and `SOCK_STREAM`. After execution, this syscall return value is `0x3` a file descriptor and stored it in register `EAX`.
+Therefore, what this snippet actually does is invoking sub-function [socket](https://manpages.ubuntu.com/manpages/bionic/man2/socket.2.html) function, with actual arguments consist of  `0x2`, `0x1` which stands for `AF_INET` and `SOCK_STREAM`. After execution, this syscall return value is `0x3` a file descriptor and stored it in register `EAX`.
 
 
 
@@ -228,7 +228,7 @@ esp (ecx) —▸ 0xbfffef54 | 0x00000003 | ◂— socket file descriptor        
 
 Before calling syscall:
 
-![sys_bind](https://github.com/sparkyvxcx/Shellcode64/blob/master/screenshot/2020-06-17_10-46.png)
+![sys_bind](https://raw.githubusercontent.com/sparkyvxcx/Shellcode64/master/screenshot/2020-06-17_10-46.png)
 
 
 
